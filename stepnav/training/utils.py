@@ -10,7 +10,7 @@ import torchdiffeq
 import wandb
 import yaml
 from diffusers.training_utils import EMAModel
-from flownav.visualizing.plot import plot_trajs_and_points
+from stepnav.visualizing.plot import plot_trajs_and_points
 
 
 def to_numpy(tensor: torch.Tensor) -> np.ndarray:

@@ -11,7 +11,7 @@ import lmdb
 import torch
 from torch.utils.data import Dataset
 
-from flownav.data.data_utils import (
+from stepnav.data.data_utils import (
     img_path_to_data,
     calculate_sin_cos,
     get_data_path,

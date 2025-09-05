@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from depth_anything_v2.dinov2 import DINOv2
 from efficientnet_pytorch import EfficientNet
-from flownav.models.attention import PositionalEncoding
+from stepnav.models.attention import PositionalEncoding
 
 
 class NoMaD_ViNT(nn.Module):

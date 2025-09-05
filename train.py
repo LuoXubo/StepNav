@@ -13,10 +13,10 @@ from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1
 from torch.optim import AdamW
 from torch.utils.data import ConcatDataset, DataLoader
 from torchvision import transforms
-from flownav.data.vint_dataset import ViNT_Dataset
-from flownav.models.nomad import DenseNetwork, NoMaD
-from flownav.models.nomad_vint import NoMaD_ViNT, replace_bn_with_gn
-from flownav.training.loop import main_loop
+from stepnav.data.vint_dataset import ViNT_Dataset
+from stepnav.models.nomad import DenseNetwork, NoMaD
+from stepnav.models.nomad_vint import NoMaD_ViNT, replace_bn_with_gn
+from stepnav.training.loop import main_loop
 from warmup_scheduler import GradualWarmupScheduler
 
 

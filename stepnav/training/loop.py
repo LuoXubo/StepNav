@@ -9,8 +9,8 @@ from diffusers.training_utils import EMAModel
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from flownav.training.evaluate import evaluate
-from flownav.training.train import train
+from stepnav.training.evaluate import evaluate
+from stepnav.training.train import train
 
 
 def main_loop(

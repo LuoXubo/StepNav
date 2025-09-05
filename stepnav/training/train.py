@@ -9,9 +9,9 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torchcfm.conditional_flow_matching import ConditionalFlowMatcher
 from torchvision import transforms
-from flownav.data.data_utils import VISUALIZATION_IMAGE_SIZE
-from flownav.training.logger import Logger
-from flownav.training.utils import (
+from stepnav.data.data_utils import VISUALIZATION_IMAGE_SIZE
+from stepnav.training.logger import Logger
+from stepnav.training.utils import (
     ACTION_STATS,
     action_reduce,
     compute_losses,
