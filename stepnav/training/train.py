@@ -114,7 +114,7 @@ def train(
 
             # Generate random goal mask
             goal_mask = (torch.rand((B,)) < goal_mask_prob).long().to(device)
-            obsgoal_cond = model(
+            obsgoal_cond, traj_prior = model(
                 "vision_encoder",
                 obs_img=batch_obs_images,
                 goal_img=batch_goal_images,
@@ -136,7 +136,7 @@ def train(
 
             # Flow
             FM = ConditionalFlowMatcher(sigma=0.0)
-            t, xt, ut = FM.sample_location_and_conditional_flow(x0=noise, x1=naction)
+            t, xt, ut = FM.sample_location_and_conditional_flow(x0=traj_prior, x1=naction)
             vt = model(
                 "noise_pred_net", sample=xt, timestep=t, global_cond=obsgoal_cond
             )

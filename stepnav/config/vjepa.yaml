@@ -24,6 +24,7 @@ seed: 0
 # model params
 model_type: nomad
 vision_encoder: vjepa2_vint
+vjepa_type: vjepa2_large
 encoding_size: 256
 obs_encoder: vjepa2
 attn_unet: False

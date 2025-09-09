@@ -4,8 +4,10 @@ import torch.nn as nn
 
 from typing import Callable, Optional, Tuple
 
+from stepnav.models.field2prior import Field2Prior
+
 class Vjepa2(nn.Module):
-    def __init__(self, encoder = 'vjepa2_large', encoding_size = 256):
+    def __init__(self, encoder = 'vjepa2_large', encoding_size = 256, len_traj_pred = 8):
         super().__init__()
         self.imsize = 256
         self.encoding_size = encoding_size
@@ -22,6 +24,11 @@ class Vjepa2(nn.Module):
             raise ValueError("Unsupported encoder type. Use 'vjepa2_large', 'vjepa2_huge' or 'vjepa2_giant'.")
         
         self.fc = nn.Linear(self.vjepa_size, self.encoding_size)
+        
+        self.field2prior = Field2Prior(context_dim=self.encoding_size, num_final_trajectories=1, trajectory_length=len_traj_pred)
+        
+        for param in self.encoder.parameters():
+            param.requires_grad = False
         
     def preprocess(self, x):
         """
@@ -81,12 +88,16 @@ class Vjepa2(nn.Module):
         feat = torch.concat([obs_encoding, goal_encoding], dim=2)  # [B, 512, 1408*2]
         feat = feat.mean(dim=1) # [B, 1408 * 2]
         feat = self.fc(feat)  # [B, 1408 * 2] -> [B, encoding_size]
-        return feat
+        
+        traj_prior = self.field2prior(feat)
+        
+        return feat, traj_prior
     
     
 if __name__ == "__main__":
     model = Vjepa2(encoder='vjepa2_huge')
     obs_img = torch.randn(2, 9, 256, 256)  # Example observation images
     goal_img = torch.randn(2, 3, 256, 256)  # Example goal image
-    output = model(obs_img, goal_img)
-    print(output.shape)  # Should print the shape of the output tensor
+    output_feat, output_traj_prior = model(obs_img, goal_img)
+    print(output_feat.shape)  # Should print the shape of the output tensor
+    print(output_traj_prior.shape)  # Should print the shape of the output tensor

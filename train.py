@@ -16,6 +16,7 @@ from torchvision import transforms
 from stepnav.data.vint_dataset import ViNT_Dataset
 from stepnav.models.nomad import DenseNetwork, NoMaD
 from stepnav.models.nomad_vint import NoMaD_ViNT, replace_bn_with_gn
+from stepnav.models.vjepa2_vint import Vjepa2
 from stepnav.training.loop import main_loop
 from warmup_scheduler import GradualWarmupScheduler
 
@@ -124,15 +125,26 @@ def main(config: dict) -> None:
         )
 
     # Create the model
-    vision_encoder = NoMaD_ViNT(
-        obs_encoding_size=config["encoding_size"],
-        context_size=config["context_size"],
-        mha_num_attention_heads=config["mha_num_attention_heads"],
-        mha_num_attention_layers=config["mha_num_attention_layers"],
-        mha_ff_dim_factor=config["mha_ff_dim_factor"],
-        depth_cfg=config["depth"],
-    )
-    vision_encoder = replace_bn_with_gn(vision_encoder)
+    if config['vision_encoder'] == 'nomad_vint':
+        vision_encoder = NoMaD_ViNT(
+            obs_encoding_size=config["encoding_size"],
+            context_size=config["context_size"],
+            mha_num_attention_heads=config["mha_num_attention_heads"],
+            mha_num_attention_layers=config["mha_num_attention_layers"],
+            mha_ff_dim_factor=config["mha_ff_dim_factor"],
+            depth_cfg=config["depth"],
+        )
+        vision_encoder = replace_bn_with_gn(vision_encoder)
+    
+    elif config['vision_encoder'] == 'vjepa2_vint':
+        vision_encoder = Vjepa2(
+            encoder=config['vjepa_type'],
+            encoding_size=config["encoding_size"],
+            len_traj_pred=config["len_traj_pred"]
+        )
+    else:
+        raise ValueError("Unsupported vision encoder type. Use 'nomad_vint' or 'vjepa2_vint'.")
+    
     noise_pred_net = ConditionalUnet1D(
         input_dim=2,
         global_cond_dim=config["encoding_size"],
@@ -192,24 +204,24 @@ def main(config: dict) -> None:
             scheduler.load_state_dict(latest_checkpoint["scheduler"].state_dict())
 
     # Load Depth-Anything pre-trained weights
-    checkpoint = torch.load(
-        config["depth"]["weights_path"],
-        map_location=device,
-    )
-    saved_state_dict = (
-        checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
-    )
-    updated_state_dict = {
-        k.replace("pretrained.", ""): v
-        for k, v in saved_state_dict.items()
-        if "pretrained" in k
-    }
-    new_state_dict = {
-        k: v
-        for k, v in updated_state_dict.items()
-        if k in model.vision_encoder.depth_encoder.state_dict()
-    }
-    model.vision_encoder.depth_encoder.load_state_dict(new_state_dict, strict=False)
+    # checkpoint = torch.load(
+    #     config["depth"]["weights_path"],
+    #     map_location=device,
+    # )
+    # saved_state_dict = (
+    #     checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
+    # )
+    # updated_state_dict = {
+    #     k.replace("pretrained.", ""): v
+    #     for k, v in saved_state_dict.items()
+    #     if "pretrained" in k
+    # }
+    # new_state_dict = {
+    #     k: v
+    #     for k, v in updated_state_dict.items()
+    #     if k in model.vision_encoder.depth_encoder.state_dict()
+    # }
+    # model.vision_encoder.depth_encoder.load_state_dict(new_state_dict, strict=False)
 
     # Multi-GPU setup
     if len(config["gpu_ids"]) > 1:
