@@ -189,12 +189,6 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 4. Push to the branch (`git push origin feature/amazing-feature`)  
 5. Open a Pull Request
 
-## 📞 Contact
-
-- **Author**: [Your Name](mailto:your.email@university.edu)
-- **Project Link**: [https://github.com/yourusername/stepnav](https://github.com/yourusername/stepnav)
-- **Paper**: [arXiv Link](https://arxiv.org/abs/xxxx.xxxxx)
-
 ## 🙏 Acknowledgments
 
 - Thanks to the robotics and computer vision communities for inspiring this work
