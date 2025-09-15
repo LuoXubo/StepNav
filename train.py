@@ -268,7 +268,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         "-c",
-        default="config/flownav.yaml",
+        default="config/stepnav.yaml",
         type=str,
         help="Path to the config file",
     )
@@ -276,7 +276,7 @@ if __name__ == "__main__":
 
     # Load the configuration
     this_file_dir = os.path.dirname(os.path.abspath(__file__))
-    with open(f"{this_file_dir}/flownav/config/flownav.yaml", "r") as f:
+    with open(f"{this_file_dir}/stepnav/config/stepnav.yaml", "r") as f:
         default_config = yaml.safe_load(f)
     config = default_config
     with open(args.config, "r") as f:
