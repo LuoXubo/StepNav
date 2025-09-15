@@ -36,8 +36,8 @@ fig, ax1 = plt.subplots(figsize=(12, 7), facecolor='#F8F9FA')
 ax1.set_facecolor('#F8F9FA')
 
 # Plot SR on left y-axis with improved styling
-ax1.set_xlabel('Refinement Steps', fontsize=14, fontweight='bold', color='#333333')
-ax1.set_ylabel('Success Rate (%)', fontsize=14, fontweight='bold', color=colors['stepnav'])
+ax1.set_xlabel('Refinement Steps', fontsize=16, fontweight='bold', color='#333333')
+ax1.set_ylabel('Success Rate (%)', fontsize=16, fontweight='bold', color=colors['stepnav'])
 ax1.plot(steps, stepnav_sr, 'o-', color=colors['stepnav'], label='StepNav', 
          linewidth=3, markersize=8, markerfacecolor='white', markeredgewidth=2)
 ax1.plot(steps, flownav_sr, 's-', color=colors['flownav'], label='FlowNav', 
@@ -54,14 +54,14 @@ ax1.set_axisbelow(True)
 
 # Create second y-axis for Collision rate with improved styling
 ax2 = ax1.twinx()
-ax2.set_ylabel('Collision Rate', fontsize=14, fontweight='bold', color=colors['flownav'])
+ax2.set_ylabel('Collision Rate', fontsize=16, fontweight='bold', color=colors['flownav'])
 ax2.plot(steps, stepnav_coll, 'o--', color=colors['stepnav'], alpha=0.8, 
          linewidth=2.5, markersize=6, markerfacecolor='white', markeredgewidth=1.5)
 ax2.plot(steps, flownav_coll, 's--', color=colors['flownav'], alpha=0.8, 
          linewidth=2.5, markersize=6, markerfacecolor='white', markeredgewidth=1.5)
 ax2.plot(steps, navibridger_coll, '^--', color=colors['navibridger'], alpha=0.8, 
          linewidth=2.5, markersize=6, markerfacecolor='white', markeredgewidth=1.5)
-ax2.tick_params(axis='y', labelcolor=colors['flownav'], labelsize=12)
+ax2.tick_params(axis='y', labelcolor=colors['flownav'], labelsize=14)
 ax2.set_ylim(0.52, 1.02)
 
 # Enhanced legend
@@ -70,17 +70,17 @@ lines1, labels1 = ax1.get_legend_handles_labels()
 #                     fontsize=12, frameon=True, fancybox=True, shadow=True, 
 #                     facecolor='white', edgecolor='#CCCCCC')
 legend = ax1.legend(lines1, labels1, loc='center right', 
-                    fontsize=12, frameon=True, fancybox=True, shadow=True, 
+                    fontsize=16, frameon=True, fancybox=True, shadow=True, 
                     facecolor='white', edgecolor='#CCCCCC')
 legend.get_frame().set_linewidth(1.5)
 
 # Add informative annotations
-ax1.text(0.02, 0.98, 'Solid lines: Success Rate', transform=ax1.transAxes, fontsize=11, 
-         verticalalignment='top', bbox=dict(boxstyle='round,pad=0.5', facecolor='white', 
-         alpha=0.9, edgecolor='#CCCCCC'), fontweight='bold')
-ax1.text(0.22, 0.98, 'Dashed lines: Collision Rate', transform=ax1.transAxes, fontsize=11,
-         verticalalignment='top', bbox=dict(boxstyle='round,pad=0.5', facecolor='white', 
-         alpha=0.9, edgecolor='#CCCCCC'), fontweight='bold')
+# ax1.text(0.02, 0.98, 'Solid lines: Success Rate', transform=ax1.transAxes, fontsize=14, 
+#          verticalalignment='top', bbox=dict(boxstyle='round,pad=0.5', facecolor='white', 
+#          alpha=0.9, edgecolor='#CCCCCC'), fontweight='bold')
+# ax1.text(0.22, 0.98, 'Dashed lines: Collision Rate', transform=ax1.transAxes, fontsize=14,
+#          verticalalignment='top', bbox=dict(boxstyle='round,pad=0.5', facecolor='white', 
+#          alpha=0.9, edgecolor='#CCCCCC'), fontweight='bold')
 
 # Enhanced title
 # plt.title('Navigation Performance Scaling with Refinement Steps', fontsize=16, 
