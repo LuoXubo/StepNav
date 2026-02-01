@@ -230,27 +230,19 @@
         </button>
       </div>
       <div class="works-list">
-        <a href="https://github.com/robodhruv/visualnav-transformer" class="work-item" target="_blank">
+        <a href="https://github.com/LuoXubo/JointLoc" class="work-item" target="_blank">
           <div class="work-info">
-            <h5>NoMaD: Goal Masking Diffusion Policies</h5>
-            <p>Visual navigation using goal-conditioned diffusion policies for mobile robots.</p>
-            <span class="work-venue">ICRA 2024</span>
+            <h5>JointLoc: Joint Relative and Absolute Pose Estimation</h5>
+            <p>A Real-time Visual Localization Framework for Planetary UAVs Based on Joint Relative and Absolute Pose Estimation.</p>
+            <span class="work-venue">IROS 2024</span>
           </div>
           <i class="fas fa-external-link-alt"></i>
         </a>
-        <a href="https://github.com/utn-air/flownav" class="work-item" target="_blank">
+        <a href="https://github.com/LuoXubo/KANLoc" class="work-item" target="_blank">
           <div class="work-info">
-            <h5>FlowNav: Learning Flow-based Policies</h5>
-            <p>Flow-based navigation policies for autonomous navigation tasks.</p>
-            <span class="work-venue">CoRL 2023</span>
-          </div>
-          <i class="fas fa-external-link-alt"></i>
-        </a>
-        <a href="https://github.com/hren20/NaiviBridger" class="work-item" target="_blank">
-          <div class="work-info">
-            <h5>NaviBridger: Cross-domain Navigation</h5>
-            <p>Bridging the gap between simulation and real-world robot navigation.</p>
-            <span class="work-venue">RSS 2023</span>
+            <h5>KANLoc: KAN-Based Pose Regression</h5>
+            <p>Learning to Anchor Visual Odometry with KAN-Based Pose Regression for Planetary Landing.</p>
+            <span class="work-venue">RA-L 2026</span>
           </div>
           <i class="fas fa-external-link-alt"></i>
         </a>
@@ -329,22 +321,6 @@
   </div>
 </section>
 
-
-<!-- Teaser video-->
-<section class="hero teaser">
-  <div class="container is-max-desktop">
-    <div class="hero-body">
-      <video poster="" id="tree" autoplay controls muted loop height="100%" preload="metadata">
-        <source src="static/videos/banner_video.mp4" type="video/mp4">
-      </video>
-      <h2 class="subtitle has-text-centered">
-        StepNav generates efficient and safe navigation trajectories using structured trajectory priors instead of random noise initialization.
-      </h2>
-    </div>
-  </div>
-</section>
-<!-- End teaser video -->
-
 <!-- Paper abstract -->
 <section class="section hero is-light">
   <div class="container is-max-desktop">
@@ -369,55 +345,29 @@
     <div class="container">
       <div id="results-carousel" class="carousel results-carousel">
        <div class="item">
-        <img src="static/images/carousel1.jpg" alt="Structured trajectory priors visualization" loading="lazy"/>
+        <img src="static/images/pipeline.png" alt="Structured trajectory priors visualization" loading="lazy"/>
         <h2 class="subtitle has-text-centered">
-          Structured trajectory priors provide multi-modal initialization for safe navigation.
+          Pipeline of StepNav: structured trajectory priors guide efficient trajectory generation.
         </h2>
       </div>
       <div class="item">
-        <img src="static/images/carousel2.jpg" alt="Success probability field" loading="lazy"/>
+        <img src="static/images/vis.png" alt="Success probability field" loading="lazy"/>
         <h2 class="subtitle has-text-centered">
-          Success probability field highlights safe and viable navigation regions.
+          Visualization of the success probability field predicting safe navigation regions.
         </h2>
       </div>
       <div class="item">
-        <img src="static/images/carousel3.jpg" alt="Trajectory generation results" loading="lazy"/>
+        <img src="static/images/comp.png" alt="Trajectory generation results" loading="lazy"/>
         <h2 class="subtitle has-text-centered">
-         Generated trajectories show improved safety and efficiency compared to baseline methods.
+         Comparison of trajectory generation results with different methods.
        </h2>
      </div>
-     <div class="item">
-      <img src="static/images/carousel4.jpg" alt="Real-world deployment" loading="lazy"/>
-      <h2 class="subtitle has-text-centered">
-        Real-world navigation experiments demonstrate robust performance.
-      </h2>
-    </div>
   </div>
 </div>
 </div>
 </section>
 <!-- End image carousel -->
 
-
-
-
-<!-- Youtube video -->
-<section class="hero is-small is-light">
-  <div class="hero-body">
-    <div class="container">
-      <h2 class="title is-3">Video Presentation</h2>
-      <div class="columns is-centered has-text-centered">
-        <div class="column is-four-fifths">
-          
-          <div class="publication-video">
-            <iframe src="https://www.youtube.com/embed/YOUR_VIDEO_ID" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-<!-- End youtube video -->
 
 
 <!-- Video carousel -->
@@ -433,12 +383,12 @@
         </div>
         <div class="item item-video2">
           <video poster="" id="video2" controls muted loop height="100%" preload="metadata">
-            <source src="static/videos/carousel2.mp4" type="video/mp4">
+            <source src="static/videos/carousel1.mp4" type="video/mp4">
           </video>
         </div>
         <div class="item item-video3">
           <video poster="" id="video3" controls muted loop height="100%" preload="metadata">
-            <source src="static/videos/carousel3.mp4" type="video/mp4">
+            <source src="static/videos/carousel1.mp4" type="video/mp4">
           </video>
         </div>
       </div>
@@ -446,25 +396,6 @@
   </div>
 </section>
 <!-- End video carousel -->
-
-
-
-
-
-
-<!-- Paper poster -->
-<section class="hero is-small is-light">
-  <div class="hero-body">
-    <div class="container">
-      <h2 class="title">Poster</h2>
-
-      <iframe  src="static/pdfs/poster.pdf" width="100%" height="550">
-          </iframe>
-        
-      </div>
-    </div>
-  </section>
-<!--End paper poster -->
 
 
 
