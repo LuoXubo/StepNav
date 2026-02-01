@@ -52,5 +52,5 @@ pip install -e .
 ## Acknowledgements
 This project is inspired by and builds upon the following works:
 - [NoMaD](https://github.com/robodhruv/visualnav-transformer)
-- [FlowNav](https://github.com/utn-air/flownav)
+- [Flownav](https://github.com/utn-air/flownav)
 - [NaviBridger](https://github.com/hren20/NaiviBridger)

@@ -189,9 +189,9 @@ def evaluate(
             tepoch.set_postfix(loss=loss_cpu)
 
             if use_wandb:
-                wandb.log({"flownav_eval_loss (random masking)": rand_mask_loss})
-                wandb.log({"flownav_eval_loss (no masking)": no_mask_loss})
-                wandb.log({"flownav_eval_loss (goal masking)": goal_mask_loss})
+                wandb.log({"stepnav_eval_loss (random masking)": rand_mask_loss})
+                wandb.log({"stepnav_eval_loss (no masking)": no_mask_loss})
+                wandb.log({"stepnav_eval_loss (goal masking)": goal_mask_loss})
 
             if i % print_log_freq == 0 and print_log_freq != 0:
                 losses = compute_losses(
