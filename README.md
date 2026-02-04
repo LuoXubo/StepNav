@@ -5,7 +5,7 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=flat&logo=PyTorch&logoColor=white)](https://pytorch.org/)
 [![ICRA 2026](https://img.shields.io/badge/ICRA-2026-blue.svg)](https://2026.ieee-icra.org/)
 
-**[Project Page](https://luoxubo.github.io/StepNav/)** | **[Paper](https://arxiv.org/abs/XXXX.XXXXX)** | **[Code](https://github.com/LuoXubo/StepNav)**
+**[Project Page](https://luoxubo.github.io/StepNav/)** | **[Paper](https://arxiv.org/abs/2602.02590)** | **[Code](https://github.com/LuoXubo/StepNav)**
 
 > Official PyTorch implementation of **StepNav**, an efficient visual navigation framework accepted at **ICRA 2026**.
 
@@ -31,11 +31,14 @@ pip install -e .
 If you find this work useful, please consider citing:
 
 ```bibtex
-@inproceedings{luo2026stepnav,
-  title={StepNav: Efficient Planning with Structured Trajectory Priors},
-  author={Luo, Xubo and Wu, Aodi and Han, Haodong and Wan, Xue and Zhang, Wei and Shu, Leizheng and Wang, Ruisuo},
-  booktitle={IEEE International Conference on Robotics and Automation (ICRA)},
-  year={2026}
+@misc{luo2026stepnavstructuredtrajectorypriors,
+      title={StepNav: Structured Trajectory Priors for Efficient and Multimodal Visual Navigation}, 
+      author={Xubo Luo and Aodi Wu and Haodong Han and Xue Wan and Wei Zhang and Leizheng Shu and Ruisuo Wang},
+      year={2026},
+      eprint={2602.02590},
+      archivePrefix={arXiv},
+      primaryClass={cs.RO},
+      url={https://arxiv.org/abs/2602.02590}, 
 }
 ```
 
