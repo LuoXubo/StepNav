@@ -171,38 +171,97 @@ def model_output(
     num_samples: int,
     device: torch.device,
     use_wandb: bool,
+    num_integration_steps: int = 5,
 ) -> dict[str, torch.Tensor]:
-    # Exploration
+    """Generate trajectory predictions using StepNav's structured prior + Reg-CFM.
+
+    For exploration (unconditional): uses structured prior from masked goal.
+    For navigation (goal-conditioned): uses structured prior from full encoding.
+
+    The structured prior enables convergence in ~5 integration steps instead of
+    the 10+ steps required by noise-based methods (NoMaD, FlowNav).
+
+    Args:
+        model: The full StepNav model.
+        batch_obs_images: (B, C, H, W) observation images.
+        batch_goal_images: (B, 3, H, W) goal images.
+        pred_horizon: Number of prediction timesteps.
+        action_dim: Action dimension (2 for 2D navigation).
+        num_samples: Number of trajectory samples per observation.
+        device: Torch device.
+        use_wandb: Whether to log to wandb.
+        num_integration_steps: Number of ODE integration steps (default=5).
+
+    Returns:
+        dict with keys: uc_actions, gc_actions, gc_distance.
+    """
+    # Exploration: goal-masked conditioning
     goal_mask = torch.ones((batch_goal_images.shape[0],)).long().to(device)
-    obs_cond = model(
+    obs_cond_output = model(
         "vision_encoder",
         obs_img=batch_obs_images,
         goal_img=batch_goal_images,
         input_goal_mask=goal_mask,
     )
-    obs_cond = obs_cond.repeat_interleave(num_samples, dim=0)
 
-    # Navigation
+    # Handle tuple output from vision encoder with Field2Prior
+    if isinstance(obs_cond_output, tuple):
+        obs_cond, uc_prior = obs_cond_output
+    else:
+        obs_cond = obs_cond_output
+        uc_prior = None
+
+    obs_cond = obs_cond.repeat_interleave(num_samples, dim=0)
+    if uc_prior is not None:
+        uc_prior = uc_prior.repeat_interleave(num_samples, dim=0)
+
+    # Navigation: full goal conditioning
     no_mask = torch.zeros((batch_goal_images.shape[0],)).long().to(device)
-    obsgoal_cond = model(
+    obsgoal_cond_output = model(
         "vision_encoder",
         obs_img=batch_obs_images,
         goal_img=batch_goal_images,
         input_goal_mask=no_mask,
     )
+
+    if isinstance(obsgoal_cond_output, tuple):
+        obsgoal_cond, gc_prior = obsgoal_cond_output
+    else:
+        obsgoal_cond = obsgoal_cond_output
+        gc_prior = None
+
     obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
+    if gc_prior is not None:
+        gc_prior = gc_prior.repeat_interleave(num_samples, dim=0)
 
     with torch.no_grad():
         start_time = time.time()
 
-        # Exploration
-        output = torch.randn((len(obs_cond), pred_horizon, action_dim), device=device)
+        # ====== Exploration: Reg-CFM with structured prior ======
+        # Initialize from structured prior (or fall back to Gaussian noise)
+        if uc_prior is not None:
+            # Interpolate prior to match prediction horizon if needed
+            if uc_prior.shape[1] != pred_horizon:
+                output = F.interpolate(
+                    uc_prior.permute(0, 2, 1),
+                    size=pred_horizon,
+                    mode='linear',
+                    align_corners=True,
+                ).permute(0, 2, 1)
+            else:
+                output = uc_prior
+        else:
+            output = torch.randn(
+                (len(obs_cond), pred_horizon, action_dim), device=device
+            )
+
+        # ODE integration with fewer steps (5 vs 10+ for noise-based methods)
         traj = torchdiffeq.odeint(
             lambda t, x: model.forward(
                 "noise_pred_net", sample=x, timestep=t, global_cond=obs_cond
             ),
             output,
-            torch.linspace(0, 1, 10, device=device),
+            torch.linspace(0, 1, num_integration_steps, device=device),
             atol=1e-4,
             rtol=1e-4,
             method="euler",
@@ -214,14 +273,28 @@ def model_output(
             wandb.log({"Mean Processing Time UC": mean_proc_time})
             wandb.log({"Processing Time UC": proc_time})
 
-        # Navigation
-        output = torch.randn((len(obs_cond), pred_horizon, action_dim), device=device)
+        # ====== Navigation: Reg-CFM with structured prior ======
+        if gc_prior is not None:
+            if gc_prior.shape[1] != pred_horizon:
+                output = F.interpolate(
+                    gc_prior.permute(0, 2, 1),
+                    size=pred_horizon,
+                    mode='linear',
+                    align_corners=True,
+                ).permute(0, 2, 1)
+            else:
+                output = gc_prior
+        else:
+            output = torch.randn(
+                (len(obs_cond), pred_horizon, action_dim), device=device
+            )
+
         traj = torchdiffeq.odeint(
             lambda t, x: model.forward(
                 "noise_pred_net", sample=x, timestep=t, global_cond=obsgoal_cond
             ),
             output,
-            torch.linspace(0, 1, 10, device=device),
+            torch.linspace(0, 1, num_integration_steps, device=device),
             atol=1e-4,
             rtol=1e-4,
             method="euler",
@@ -234,8 +307,8 @@ def model_output(
             wandb.log({"Processing Time GC": proc_time})
 
     # Predict distance
-    obsgoal_cond = obsgoal_cond.flatten(start_dim=1)
-    gc_distance = model("dist_pred_net", obsgoal_cond=obsgoal_cond)
+    obsgoal_cond_flat = obsgoal_cond.flatten(start_dim=1)
+    gc_distance = model("dist_pred_net", obsgoal_cond=obsgoal_cond_flat)
 
     return {
         "uc_actions": uc_actions,

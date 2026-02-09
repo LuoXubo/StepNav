@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import click
 from depth_anything_v2.depth_anything_v2.dinov2 import DINOv2
-from flownav.models.attention import PositionalEncoding
+from stepnav.models.attention import PositionalEncoding, DIFP
 
 
 class VJEPA2NavigationEncoder(nn.Module):
@@ -234,6 +234,14 @@ class NoMaD_VJEPA(nn.Module):
             dim=0,
         )
 
+        # DIFP: Dynamics-Inspired Feature Refinement module
+        # Refines the temporal feature sequence Z via a goal-conditional
+        # variational formulation to produce smooth, goal-aligned features.
+        self.difp = DIFP(
+            feature_dim=self.obs_encoding_size,
+            max_seq_len=num_tokens,
+        )
+
     def forward(
         self,
         obs_img: torch.Tensor,
@@ -320,11 +328,17 @@ class NoMaD_VJEPA(nn.Module):
                 self.avg_pool_mask.to(device), 0, no_goal_mask
             ).unsqueeze(-1)
             encoding_tokens = encoding_tokens * avg_mask
-            
-        # Global average pooling over all tokens
-        final_encoding = torch.mean(encoding_tokens, dim=1)  # [B, obs_encoding_size]
 
-        return final_encoding
+        # Apply DIFP: Dynamics-Inspired Feature Refinement
+        # encoding_tokens: (B, num_tokens, obs_encoding_size)
+        # Z_tilde: refined temporal features, z_c: global motion context
+        Z_tilde, z_c = self.difp(encoding_tokens)  # (B, T, D), (B, D)
+
+        # Global average pooling over refined tokens
+        final_encoding = torch.mean(Z_tilde, dim=1)  # (B, obs_encoding_size)
+
+        # Return both the encoding for conditioning and z_c for field estimation
+        return final_encoding, z_c
 
 
 # Utils for Group Norm (kept for potential future use)

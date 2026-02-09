@@ -10,6 +10,11 @@ from torch.utils.data import DataLoader
 from torchcfm.conditional_flow_matching import ConditionalFlowMatcher
 from torchvision import transforms
 from stepnav.data.data_utils import VISUALIZATION_IMAGE_SIZE
+from stepnav.models.cfm import (
+    compute_smoothness_loss,
+    compute_safety_loss,
+    create_field_based_distance_fn,
+)
 from stepnav.training.logger import Logger
 from stepnav.training.utils import (
     ACTION_STATS,
@@ -33,12 +38,42 @@ def train(
     project_folder: str,
     epoch: int,
     alpha: float = 1e-4,
+    lambda_smooth: float = 0.1,
+    lambda_safe: float = 0.01,
+    lambda_field: float = 0.1,
     print_log_freq: int = 100,
     wandb_log_freq: int = 10,
     image_log_freq: int = 1000,
     num_images_log: int = 8,
     use_wandb: bool = True,
 ):
+    """Train the StepNav model for one epoch.
+
+    The training pipeline follows the paper's three-stage approach:
+    1. Vision encoder with DIFP produces refined features and z_c.
+    2. Field2Prior predicts success field F and extracts structured prior tau_0.
+    3. Reg-CFM refines tau_0 toward expert trajectory with smoothness + safety loss.
+
+    Args:
+        model: The full NoMaD model with vision encoder, Field2Prior, and U-Net.
+        ema_model: Exponential moving average of the model.
+        optimizer: Optimizer instance.
+        dataloader: Training data loader.
+        transform: Image transformation pipeline.
+        device: Torch device.
+        goal_mask_prob: Probability of masking the goal during training.
+        project_folder: Path to save logs and checkpoints.
+        epoch: Current epoch number.
+        alpha: Weight for distance prediction loss.
+        lambda_smooth: Weight for Reg-CFM smoothness regularization.
+        lambda_safe: Weight for Reg-CFM safety regularization.
+        lambda_field: Weight for success field supervision loss.
+        print_log_freq: Frequency for printing logs.
+        wandb_log_freq: Frequency for wandb logging.
+        image_log_freq: Frequency for image logging.
+        num_images_log: Number of images to log.
+        use_wandb: Whether to use Weights & Biases logging.
+    """
     goal_mask_prob = torch.clip(torch.tensor(goal_mask_prob), 0, 1)
     model.train()
     num_batches = len(dataloader)
@@ -131,21 +166,67 @@ def train(
                 1e-2 + (1 - goal_mask.float()).mean()
             )
 
-            # Sample noise to add to actions
-            noise = torch.randn(naction.shape, device=device)
+            # ====== Reg-CFM: Flow matching with structured prior ======
+            # Use structured prior from Field2Prior as x0 (NOT Gaussian noise)
+            # Resize prior trajectory to match action dimensions if needed
+            if traj_prior.shape[1] != naction.shape[1]:
+                # Interpolate prior to match action sequence length
+                traj_prior_interp = F.interpolate(
+                    traj_prior.permute(0, 2, 1),
+                    size=naction.shape[1],
+                    mode='linear',
+                    align_corners=True,
+                ).permute(0, 2, 1)
+            else:
+                traj_prior_interp = traj_prior
 
-            # Flow
+            # Conditional Flow Matching: interpolate between structured prior and expert
             FM = ConditionalFlowMatcher(sigma=0.0)
-            t, xt, ut = FM.sample_location_and_conditional_flow(x0=traj_prior, x1=naction)
+            t, xt, ut = FM.sample_location_and_conditional_flow(
+                x0=traj_prior_interp, x1=naction
+            )
+
+            # Predict velocity field v_theta
             vt = model(
                 "noise_pred_net", sample=xt, timestep=t, global_cond=obsgoal_cond
             )
 
-            # L2 loss
+            # Flow matching loss: ||v_theta - u_t||^2
             flow_loss = action_reduce(F.mse_loss(vt, ut, reduction="none"), action_mask)
 
-            # Total loss
-            loss = alpha * dist_loss + (1 - alpha) * flow_loss
+            # Smoothness regularization: rho * ||jerk(tau_t)||^2
+            current_traj = xt.reshape(B, naction.shape[1], naction.shape[2])
+            smooth_loss = compute_smoothness_loss(current_traj, action_mask)
+
+            # Safety regularization using success field (if available)
+            safe_loss = torch.tensor(0.0, device=device)
+            if hasattr(model, '_last_field_grid') and model._last_field_grid is not None:
+                field_distance_fn = create_field_based_distance_fn(
+                    model._last_field_grid
+                )
+                safe_loss = compute_safety_loss(
+                    current_traj, field_distance_fn, epsilon=0.1, action_mask=action_mask
+                )
+
+            # Success field supervision loss (biharmonic-regularized)
+            field_loss = torch.tensor(0.0, device=device)
+            if hasattr(model, '_last_field_grid') and model._last_field_grid is not None:
+                field_grid = model._last_field_grid
+                # Use expert actions as supervision for the field
+                expert_grid_paths = actions[:, :, :2].to(device)
+                if hasattr(model, 'field2prior') and model.field2prior is not None:
+                    field_loss = model.field2prior.compute_field_loss(
+                        field_grid, expert_grid_paths
+                    )
+
+            # Total loss: Reg-CFM + distance + field supervision
+            loss = (
+                alpha * dist_loss
+                + (1 - alpha) * flow_loss
+                + lambda_smooth * smooth_loss
+                + lambda_safe * safe_loss
+                + lambda_field * field_loss
+            )
 
             # Optimize
             optimizer.zero_grad()
@@ -162,6 +243,9 @@ def train(
                 wandb.log({"total_loss": loss_cpu})
                 wandb.log({"dist_loss": dist_loss.item()})
                 wandb.log({"flow_loss": flow_loss.item()})
+                wandb.log({"smooth_loss": smooth_loss.item()})
+                wandb.log({"safe_loss": safe_loss.item()})
+                wandb.log({"field_loss": field_loss.item()})
 
             if i % print_log_freq == 0:
                 losses = compute_losses(

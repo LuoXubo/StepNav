@@ -4,16 +4,20 @@ from conditional_flow_matching import ConditionalFlowMatcher
 
 
 def compute_smoothness_loss(trajectory, action_mask=None):
-    """
-    Compute trajectory smoothness loss using a finite-difference approximation
-    of jerk (third derivative).
-    L_smooth = sum ||x_{k+3} - 3*x_{k+2} + 3*x_{k+1} - x_k||^2
+    """Compute trajectory smoothness loss using jerk (third derivative) penalty.
+
+    From the paper's Reg-CFM formulation:
+        L_smooth = rho * ||dddot(tau_t)||^2
+
+    Approximated via finite differences:
+        jerk_k = x_{k+3} - 3*x_{k+2} + 3*x_{k+1} - x_k
 
     Args:
-        trajectory (Tensor): (batch_size, seq_len, action_dim)
-        action_mask (Tensor|None): (batch_size, seq_len) mask of valid steps.
+        trajectory: (B, T, A) trajectory tensor with T waypoints.
+        action_mask: (B, T) optional mask of valid timesteps.
+
     Returns:
-        Tensor: scalar smoothness loss.
+        Scalar smoothness loss.
     """
     batch_size, seq_len, action_dim = trajectory.shape
     if seq_len < 4:
@@ -41,17 +45,23 @@ def compute_smoothness_loss(trajectory, action_mask=None):
 
 
 def compute_safety_loss(trajectory, success_field_fn, epsilon=0.1, action_mask=None):
-    """
-    Compute safety loss using a logarithmic barrier:
-    L_safe = -sum log(max(d_k - epsilon, 0))
+    """Compute safety loss using logarithmic barrier from the paper.
+
+    From the Reg-CFM loss:
+        L_safe = -kappa * sum_k log(max(d(x_k) - epsilon, 0))
+
+    where d(x_k) is the distance to obstacles, approximated as 1 - F(x_k)
+    when using the success probability field. We use F(x_k) directly as
+    the distance proxy (higher F = safer).
 
     Args:
-        trajectory (Tensor): (batch_size, seq_len, action_dim)
-        success_field_fn (Callable): maps waypoint -> distance proxy tensor (batch_size,)
-        epsilon (float): safety margin threshold.
-        action_mask (Tensor|None): (batch_size, seq_len) validity mask.
+        trajectory: (B, T, A) trajectory tensor.
+        success_field_fn: Callable mapping (B, A) waypoints -> (B,) distance proxy.
+        epsilon: Safety margin threshold.
+        action_mask: (B, T) optional validity mask.
+
     Returns:
-        Tensor: scalar safety loss.
+        Scalar safety loss.
     """
     batch_size, seq_len, action_dim = trajectory.shape
     safe_loss = 0.0
@@ -68,34 +78,53 @@ def compute_safety_loss(trajectory, success_field_fn, epsilon=0.1, action_mask=N
 
 def train_regularized_cfm(
     model,
-    noise,
+    prior_trajectory,
     naction,
     obsgoal_cond,
     action_mask,
-    success_field_fn,
+    success_field_fn=None,
     lambda_smooth=0.1,
     lambda_safe=0.01,
     epsilon=0.1,
 ):
-    """
-    Train with Conditional Flow Matching plus smoothness & safety regularization.
+    """Train with Regularized Conditional Flow Matching (Reg-CFM).
+
+    From the paper, the Reg-CFM loss is:
+        L_RegCFM = E_{tau,t}[ ||v_theta(tau_t, t, z_c) - u_t||^2
+                              + rho * ||dddot(tau_t)||^2
+                              - kappa * sum_k log(max(d(x_k) - epsilon, 0)) ]
+
+    The key difference from standard CFM is:
+    1. Initialization from structured prior tau_0 ~ p_prior (not Gaussian noise)
+    2. Explicit smoothness regularization (jerk penalty)
+    3. Explicit safety regularization (log-barrier on obstacle distance)
+
+    This allows convergence in ~5 steps instead of >10 for noise-based methods.
 
     Args:
-        model: neural network with callable interface like model(task_name, sample, timestep, global_cond)
-        noise (Tensor): initial noisy trajectory x0, shape (B, T, A)
-        naction (Tensor): target expert trajectory x1, shape (B, T, A)
-        obsgoal_cond (Tensor): conditioning tensor (B, C)
-        action_mask (Tensor): (B, T) mask for valid steps
-        success_field_fn (Callable): waypoint -> distance proxy tensor
-        lambda_smooth (float): weight for smoothness regularization
-        lambda_safe (float): weight for safety regularization
-        epsilon (float): safety margin
+        model: Neural network with callable interface (task_name, sample, timestep, global_cond).
+        prior_trajectory: (B, T, A) structured prior trajectory x0 from Field2Prior.
+        naction: (B, T, A) target expert trajectory x1 (normalized).
+        obsgoal_cond: (B, C) conditioning tensor from vision encoder.
+        action_mask: (B, T) mask for valid timesteps.
+        success_field_fn: Optional callable mapping waypoints -> distance proxy.
+        lambda_smooth: Weight rho for smoothness regularization.
+        lambda_safe: Weight kappa for safety regularization.
+        epsilon: Safety margin for log-barrier.
+
     Returns:
-        dict: loss components {total_loss, flow_loss, smooth_loss, safe_loss}
+        dict: Loss components {total_loss, flow_loss, smooth_loss, safe_loss}.
     """
     FM = ConditionalFlowMatcher(sigma=0.0)
-    t, xt, ut = FM.sample_location_and_conditional_flow(x0=noise, x1=naction)
 
+    # Sample interpolated trajectory and conditional vector field
+    # x0 = prior_trajectory (structured prior, NOT Gaussian noise)
+    # x1 = naction (expert target)
+    t, xt, ut = FM.sample_location_and_conditional_flow(
+        x0=prior_trajectory, x1=naction
+    )
+
+    # Predict the velocity field v_theta
     vt = model(
         "noise_pred_net",
         sample=xt,
@@ -103,21 +132,30 @@ def train_regularized_cfm(
         global_cond=obsgoal_cond,
     )
 
+    # Flow matching loss: ||v_theta - u_t||^2
     flow_loss = action_reduce(F.mse_loss(vt, ut, reduction="none"), action_mask)
 
-    # Infer trajectory shape directly from naction
+    # Reshape interpolated trajectory for regularization computation
     batch_size, seq_len, action_dim = naction.shape
     current_trajectory = xt.reshape(batch_size, seq_len, action_dim)
 
+    # Smoothness regularization: rho * ||jerk||^2
     smooth_loss = compute_smoothness_loss(current_trajectory, action_mask)
-    safe_loss = compute_safety_loss(
-        current_trajectory,
-        success_field_fn,
-        epsilon=epsilon,
-        action_mask=action_mask,
-    )
 
+    # Safety regularization: -kappa * sum log(max(d - epsilon, 0))
+    if success_field_fn is not None:
+        safe_loss = compute_safety_loss(
+            current_trajectory,
+            success_field_fn,
+            epsilon=epsilon,
+            action_mask=action_mask,
+        )
+    else:
+        safe_loss = torch.tensor(0.0, device=naction.device)
+
+    # Total Reg-CFM loss
     total_loss = flow_loss + lambda_smooth * smooth_loss + lambda_safe * safe_loss
+
     return {
         "total_loss": total_loss,
         "flow_loss": flow_loss,
@@ -127,14 +165,14 @@ def train_regularized_cfm(
 
 
 def action_reduce(loss, action_mask=None):
-    """
-    Reduce loss considering an optional action mask.
+    """Reduce loss tensor considering an optional action mask.
 
     Args:
-        loss (Tensor): element-wise loss (..., action_dim) or (...,)
-        action_mask (Tensor|None): (batch_size, seq_len)
+        loss: Element-wise loss tensor (..., action_dim) or (...,).
+        action_mask: (B, T) optional validity mask.
+
     Returns:
-        Tensor: scalar reduced loss.
+        Scalar reduced loss.
     """
     if action_mask is None:
         return loss.mean()
@@ -145,44 +183,67 @@ def action_reduce(loss, action_mask=None):
     return masked_loss.sum() / (action_mask.sum() + 1e-8)
 
 
-def example_success_field_fn(waypoint):
-    """
-    Example success field function.
-    Returns a proxy distance to a fixed obstacle center.
+def create_field_based_distance_fn(field_grid, grid_size=64, workspace_bounds=(-5, 5)):
+    """Create a success-field-based distance function for safety regularization.
+
+    From the paper: d(x_k) is approximated via 1 - F(x_k), but since F represents
+    the success probability, we use F(x_k) directly as the safety proxy.
 
     Args:
-        waypoint (Tensor): (batch_size, action_dim)
+        field_grid: (B, G, G) success probability field.
+        grid_size: Resolution of the field grid.
+        workspace_bounds: (min, max) workspace extent in meters.
+
     Returns:
-        Tensor: (batch_size,) distances
+        Callable: (B, 2) waypoint -> (B,) distance proxy.
     """
-    obstacle_center = torch.tensor([5.0, 5.0], device=waypoint.device)
-    distances = torch.norm(waypoint - obstacle_center, dim=-1)
-    return distances
+    extent = workspace_bounds[1] - workspace_bounds[0]
+
+    def distance_fn(waypoint):
+        """Map waypoint coordinates to success field values.
+
+        Args:
+            waypoint: (B, 2) waypoint in workspace coordinates.
+
+        Returns:
+            (B,) success probability at each waypoint location.
+        """
+        B = waypoint.shape[0]
+        device = waypoint.device
+
+        # Convert workspace coordinates to normalized grid coordinates [-1, 1]
+        normalized = (waypoint - workspace_bounds[0]) / extent * 2.0 - 1.0
+
+        # grid_sample expects (B, C, H, W) and grid (B, H_out, W_out, 2)
+        field_input = field_grid.unsqueeze(1)  # (B, 1, G, G)
+        grid_coords = normalized.view(B, 1, 1, 2)  # (B, 1, 1, 2)
+
+        sampled = F.grid_sample(
+            field_input, grid_coords, mode='bilinear',
+            padding_mode='border', align_corners=True
+        )
+        return sampled.view(B)  # (B,)
+
+    return distance_fn
 
 
 if __name__ == "__main__":
-    # Example usage (model must be provided externally)
+    # Example usage demonstrating Reg-CFM with structured prior
     batch_size = 32
-    seq_len = 50
+    seq_len = 8
     action_dim = 2
 
-    noise = torch.randn(batch_size, seq_len, action_dim)
+    # Structured prior (NOT Gaussian noise) - simulates Field2Prior output
+    prior_trajectory = torch.randn(batch_size, seq_len, action_dim) * 0.5
     naction = torch.randn(batch_size, seq_len, action_dim)
     obsgoal_cond = torch.randn(batch_size, 256)
     action_mask = torch.ones(batch_size, seq_len)
 
-    # Placeholder: model is required. This will raise if model is None.
-    # Replace with an actual model implementing the expected interface.
-    # loss_dict = train_regularized_cfm(
-    #     model=your_model,
-    #     noise=noise,
-    #     naction=naction,
-    #     obsgoal_cond=obsgoal_cond,
-    #     action_mask=action_mask,
-    #     success_field_fn=example_success_field_fn,
-    #     lambda_smooth=0.1,
-    #     lambda_safe=0.01,
-    #     epsilon=0.1,
-    # )
-    # print(loss_dict)
-    pass
+    # Example field for safety loss
+    field_grid = torch.rand(batch_size, 64, 64)
+    distance_fn = create_field_based_distance_fn(field_grid)
+
+    print("Reg-CFM module ready. Provide model for training.")
+    print(f"  Prior trajectory shape: {prior_trajectory.shape}")
+    print(f"  Target trajectory shape: {naction.shape}")
+    print(f"  Condition shape: {obsgoal_cond.shape}")

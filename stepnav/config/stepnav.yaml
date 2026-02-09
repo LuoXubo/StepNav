@@ -57,6 +57,20 @@ context_type: temporal
 context_size: 3 # 5
 alpha: 1e-4
 
+# StepNav: Field2Prior configuration
+field2prior:
+  grid_size: 64           # Success probability field spatial resolution (H_g x H_g)
+  num_candidates: 50      # Number of candidate trajectories from A* search
+  num_final_trajectories: 5  # K trajectories after Hausdorff diversity selection
+  temperature: 0.1        # Boltzmann temperature for mixture weights
+
+# StepNav: Regularized Conditional Flow Matching (Reg-CFM)
+reg_cfm:
+  lambda_smooth: 0.1      # Weight for jerk-based smoothness regularization (rho)
+  lambda_safe: 0.01       # Weight for log-barrier safety regularization (kappa)
+  lambda_field: 0.1       # Weight for biharmonic success field supervision loss
+  num_cfm_steps: 5        # Number of ODE integration steps (paper: N=5 suffices)
+
 # distance bounds for distance and action and distance predictions 
 distance:
   min_dist_cat: 0

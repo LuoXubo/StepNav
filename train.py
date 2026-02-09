@@ -14,6 +14,7 @@ from torch.optim import AdamW
 from torch.utils.data import ConcatDataset, DataLoader
 from torchvision import transforms
 from stepnav.data.vint_dataset import ViNT_Dataset
+from stepnav.models.field2prior import Field2Prior
 from stepnav.models.nomad import DenseNetwork, NoMaD
 from stepnav.models.nomad_vint import NoMaD_ViNT, replace_bn_with_gn
 from stepnav.models.nomad_vjepa import NoMaD_VJEPA
@@ -162,10 +163,23 @@ def main(config: dict) -> None:
         cond_predict_scale=config["cond_predict_scale"],
     )
     dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])
+
+    # Create Field2Prior module for structured multi-modal prior generation
+    field2prior_cfg = config.get("field2prior", {})
+    field2prior = Field2Prior(
+        feature_dim=config["encoding_size"],
+        grid_size=field2prior_cfg.get("grid_size", 64),
+        num_waypoints=config["len_traj_pred"],
+        num_candidates=field2prior_cfg.get("num_candidates", 50),
+        num_final_trajectories=field2prior_cfg.get("num_final_trajectories", 5),
+        temperature=field2prior_cfg.get("temperature", 0.1),
+    )
+
     model = NoMaD(
         vision_encoder=vision_encoder,
         noise_pred_net=noise_pred_net,
         dist_pred_net=dist_pred_network,
+        field2prior=field2prior,
     )
     lr = float(config["lr"])
     config["optimizer"] = config["optimizer"].lower()
@@ -239,6 +253,8 @@ def main(config: dict) -> None:
     model = model.to(device)
 
     # Run the training loop
+    # Get Reg-CFM loss weights from config
+    reg_cfm_cfg = config.get("reg_cfm", {})
     main_loop(
         train_model=config["train"],
         model=model,
@@ -257,6 +273,9 @@ def main(config: dict) -> None:
         num_images_log=config["num_images_log"],
         current_epoch=current_epoch,
         alpha=float(config["alpha"]),
+        lambda_smooth=float(reg_cfm_cfg.get("lambda_smooth", 0.1)),
+        lambda_safe=float(reg_cfm_cfg.get("lambda_safe", 0.01)),
+        lambda_field=float(reg_cfm_cfg.get("lambda_field", 0.1)),
         use_wandb=config["use_wandb"],
         eval_fraction=config["eval_fraction"],
         eval_freq=config["eval_freq"],

@@ -2,6 +2,7 @@ import itertools
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision.transforms.functional as TF
 import tqdm
 import wandb
@@ -121,29 +122,45 @@ def evaluate(
             no_mask = torch.zeros_like(rand_goal_mask).long().to(device)
 
             # Get random mask conditioning
-            rand_mask_cond = ema_model(
+            rand_mask_output = ema_model(
                 "vision_encoder",
                 obs_img=batch_obs_images,
                 goal_img=batch_goal_images,
                 input_goal_mask=rand_goal_mask,
             )
+            # Handle tuple return from Field2Prior-enabled encoder
+            if isinstance(rand_mask_output, tuple):
+                rand_mask_cond, rand_mask_prior = rand_mask_output
+            else:
+                rand_mask_cond = rand_mask_output
+                rand_mask_prior = None
 
             # Get navigation conditioning
-            obsgoal_cond = ema_model(
+            no_mask_output = ema_model(
                 "vision_encoder",
                 obs_img=batch_obs_images,
                 goal_img=batch_goal_images,
                 input_goal_mask=no_mask,
             )
-            obsgoal_cond = obsgoal_cond.flatten(start_dim=1)
+            if isinstance(no_mask_output, tuple):
+                obsgoal_cond, gc_prior = no_mask_output
+            else:
+                obsgoal_cond = no_mask_output
+                gc_prior = None
+            obsgoal_cond_flat = obsgoal_cond.flatten(start_dim=1)
 
             # Get exploration conditioning
-            goal_mask_cond = ema_model(
+            goal_mask_output = ema_model(
                 "vision_encoder",
                 obs_img=batch_obs_images,
                 goal_img=batch_goal_images,
                 input_goal_mask=goal_mask,
             )
+            if isinstance(goal_mask_output, tuple):
+                goal_mask_cond, uc_prior = goal_mask_output
+            else:
+                goal_mask_cond = goal_mask_output
+                uc_prior = None
 
             # get distance to goal
             distance = distance.to(device)
@@ -153,35 +170,47 @@ def evaluate(
             ndeltas = normalize_data(deltas, ACTION_STATS)
             naction = from_numpy(ndeltas).to(device)
 
-            # Sample noise to add to actions
-            noise = torch.randn(naction.shape, device=device)
+            # Use structured prior from Field2Prior or fall back to Gaussian noise
+            def _get_prior_or_noise(prior, target_shape, device):
+                """Get structured prior, interpolating to match target if needed."""
+                if prior is not None:
+                    if prior.shape[1] != target_shape[1]:
+                        return F.interpolate(
+                            prior.permute(0, 2, 1),
+                            size=target_shape[1],
+                            mode='linear',
+                            align_corners=True,
+                        ).permute(0, 2, 1)
+                    return prior
+                return torch.randn(target_shape, device=device)
 
-            # Flow
+            # Construct x0 from structured prior for each conditioning mode
+            rand_mask_x0 = _get_prior_or_noise(rand_mask_prior, naction.shape, device)
+            gc_x0 = _get_prior_or_noise(gc_prior, naction.shape, device)
+            uc_x0 = _get_prior_or_noise(uc_prior, naction.shape, device)
+
+            # Conditional Flow Matching
             FM = ConditionalFlowMatcher(sigma=0.0)
-            t, xt, ut = FM.sample_location_and_conditional_flow(x0=noise, x1=naction)
 
-            # 1. RANDOM MASK
+            # 1. RANDOM MASK: flow from structured prior to expert trajectory
+            t, xt, ut = FM.sample_location_and_conditional_flow(x0=rand_mask_x0, x1=naction)
             rand_mask_vt = ema_model(
                 "noise_pred_net", sample=xt, timestep=t, global_cond=rand_mask_cond
             )
-
-            # L2 loss
             rand_mask_loss = nn.functional.mse_loss(rand_mask_vt, ut)
 
-            # 2. No mask
+            # 2. No mask (navigation): flow from structured prior to expert trajectory
+            t, xt, ut = FM.sample_location_and_conditional_flow(x0=gc_x0, x1=naction)
             no_mask_vt = ema_model(
                 "noise_pred_net", sample=xt, timestep=t, global_cond=obsgoal_cond
             )
-
-            # L2 loss
             no_mask_loss = nn.functional.mse_loss(no_mask_vt, ut)
 
-            # 3. Goal mask
+            # 3. Goal mask (exploration): flow from structured prior to expert trajectory
+            t, xt, ut = FM.sample_location_and_conditional_flow(x0=uc_x0, x1=naction)
             goal_mask_vt = ema_model(
                 "noise_pred_net", sample=xt, timestep=t, global_cond=goal_mask_cond
             )
-
-            # L2 loss
             goal_mask_loss = nn.functional.mse_loss(goal_mask_vt, ut)
 
             # Logging
@@ -203,7 +232,7 @@ def evaluate(
                     device=device,
                     action_mask=action_mask.to(device),
                     use_wandb=use_wandb,
-                )
+                )  # Note: compute_losses handles tuple returns internally
 
                 for key, value in losses.items():
                     if key in loggers:

@@ -31,6 +31,9 @@ def main_loop(
     num_images_log: int = 8,
     current_epoch: int = 0,
     alpha: float = 1e-4,
+    lambda_smooth: float = 0.1,
+    lambda_safe: float = 0.01,
+    lambda_field: float = 0.1,
     use_wandb: bool = True,
     eval_fraction: float = 0.25,
     eval_freq: int = 1,
@@ -66,6 +69,9 @@ def main_loop(
                 num_images_log=num_images_log,
                 use_wandb=use_wandb,
                 alpha=alpha,
+                lambda_smooth=lambda_smooth,
+                lambda_safe=lambda_safe,
+                lambda_field=lambda_field,
             )
             lr_scheduler.step()
 
