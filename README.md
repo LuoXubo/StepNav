@@ -9,13 +9,13 @@
 
 > Official PyTorch implementation of **StepNav**, an efficient visual navigation framework accepted at **ICRA 2026**.
 
-## Abstract
+## 💡 Abstract
 
 We present StepNav, an efficient planning framework for visual navigation that generates reliable trajectories using structured trajectory priors. Unlike existing methods that rely on unstructured noise, StepNav leverages multi-modal trajectory initialization combined with conditional flow matching for efficient and safe path generation.
 
 ![StepNav Overview](docs/static/images/pipeline.png)
 
-## Installation
+## 🪛 Installation
 
 ```bash
 git clone https://github.com/LuoXubo/StepNav.git
@@ -25,6 +25,10 @@ conda activate stepnav
 pip install -r requirements.txt
 pip install -e .
 ```
+
+## 🤖 Deployment
+
+The deployment code will be released soon. Stay tuned!
 
 ## Citation
 
